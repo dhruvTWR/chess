@@ -60,6 +60,12 @@ const renderBoard = () => {
             boardElement.appendChild(squareElement);
         });
     });
+
+    if(playerRole === 'b'){
+        boardElement.classList.add('flipped');
+    }else {
+        boardElement.classList.remove('flipped');
+    }
 };
 
 const handleMove = (sourceSquare, targetSource) => {
@@ -73,8 +79,18 @@ const handleMove = (sourceSquare, targetSource) => {
 
 const getPieceUnicode = (piece) => {
     const unicodePiece = {
-        p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚',
-        P: '♙', R: '♖', N: '♘', B: '♗', Q: '♕', K: '♔'
+        K: "♔",  // King
+        Q: "♕",  // Queen
+        R: "♖",  // Rook
+        B: "♗",  // Bishop
+        N: "♘",  // Knight
+        P: "♙",  // Pawn
+        k: "♚",  // King
+        q: "♛",  // Queen
+        r: "♜",  // Rook
+        b: "♝",  // Bishop
+        n: "♞",  // Knight
+        p: "♟"   // Pawn
     };
     return unicodePiece[piece.type] || '';
 };
