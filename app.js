@@ -32,11 +32,14 @@ io.on('connection', function(uniquesocket) {
         uniquesocket.emit('spectatorRole');
     }
 
+    // ✅ Notify opponent if a player disconnects
     uniquesocket.on("disconnect", function() {
         if (uniquesocket.id === players.white) {
             delete players.white;
+            io.emit('opponentLeft'); // Notify all clients
         } else if (uniquesocket.id === players.black) {
             delete players.black;
+            io.emit('opponentLeft'); // Notify all clients
         }
     });
 
@@ -53,6 +56,13 @@ io.on('connection', function(uniquesocket) {
             if (result) {
                 io.emit("move", move);
                 io.emit("boardState", chess.fen());
+
+                // ✅ Checkmate detection
+                if (chess.isCheckmate()) {
+                    const winner = chess.turn() === 'w' ? 'Black' : 'White';
+                    io.emit('checkmate', winner);
+                }
+
             } else {
                 console.log("Invalid move attempted:", move);
                 uniquesocket.emit('invalidMove', move);

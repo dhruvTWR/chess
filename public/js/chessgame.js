@@ -118,3 +118,16 @@ socket.on('boardState', (fen) => {
 socket.on('invalidMove', (move) => {
     alert("Invalid move attempted!");
 });
+
+socket.on('checkmate', (winner) => {
+    alert(`Checkmate! ${winner} wins!`);
+});
+
+socket.on('invalidTurn', () => {
+    alert("It's not your turn!");
+});
+
+socket.on('opponentLeft', () => {
+    alert("Opponent has left the match. Game over.");
+});
+
