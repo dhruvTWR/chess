@@ -15,12 +15,12 @@
         }
 
         .piece.white {
-            color: white;
-            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 1));
+            color: #ffffff !important;
+            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
         }
 
         .piece.black {
-            color: black;
+            color: #000000 !important;
         }
 
         .flipped {
@@ -44,7 +44,10 @@
         .piece {
             font-size: 36px;
             cursor: pointer;
+            font-family: 'Arial Unicode MS', 'Segoe UI Symbol', 'Noto Sans Symbols', 'Symbola', sans-serif;
+            color: inherit;
         }
+
 
         .piece.draggable {
             cursor: grab;
