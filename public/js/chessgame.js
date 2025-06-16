@@ -5,6 +5,7 @@ const boardElement = document.querySelector(".chessboard");
 let draggedPiece = null;
 let sourceSquare = null;
 let playerRole = null;
+let clickSource = null;
 
 const renderBoard = () => {
     const board = chess.board();
@@ -54,6 +55,24 @@ const renderBoard = () => {
                         col: parseInt(squareElement.dataset.col)
                     };
                     handleMove(sourceSquare, targetSource);
+                }
+            });
+
+            // Click-to-move support
+            squareElement.addEventListener("click", function () {
+                const clicked = {
+                    row: parseInt(squareElement.dataset.row),
+                    col: parseInt(squareElement.dataset.col)
+                };
+
+                if (clickSource) {
+                    handleMove(clickSource, clicked);
+                    clickSource = null;
+                } else {
+                    const piece = chess.board()[clicked.row][clicked.col];
+                    if (piece && piece.color === playerRole) {
+                        clickSource = clicked;
+                    }
                 }
             });
 
@@ -108,6 +127,10 @@ socket.on('spectatorRole', () => {
 socket.on('move', (move) => {
     chess.move(move);
     renderBoard();
+
+    if (chess.in_check()) {
+        alert("Check!");
+    }
 });
 
 socket.on('boardState', (fen) => {
@@ -119,15 +142,63 @@ socket.on('invalidMove', (move) => {
     alert("Invalid move attempted!");
 });
 
+// Checkmate detection
 socket.on('checkmate', (winner) => {
     alert(`Checkmate! ${winner} wins!`);
 });
 
-socket.on('invalidTurn', () => {
-    alert("It's not your turn!");
-});
-
+// Opponent left detection and reset
 socket.on('opponentLeft', () => {
-    alert("Opponent has left the match. Game over.");
+    alert("Opponent has left the match. Game will restart.");
+    chess.reset();
+    renderBoard();
 });
 
+// Draw
+socket.on('draw', () => {
+    alert("The game ended in a draw.");
+    chess.reset();
+    renderBoard();
+});
+
+// Stalemate
+socket.on('stalemate', () => {
+    alert("The game ended in stalemate.");
+    chess.reset();
+    renderBoard();
+});
+
+socket.on('invalidClaim', (msg) => {
+    alert(msg);
+});
+
+
+// Resign
+socket.on('resigned', (player) => {
+    alert(`${player} resigned. Game over.`);
+    chess.reset();
+    renderBoard();
+});
+
+const addControlButtons = () => {
+    const controls = document.createElement('div');
+    controls.classList.add('controls');
+
+    const resignBtn = document.createElement('button');
+    resignBtn.innerText = 'Resign';
+    resignBtn.classList.add('control-btn');
+    resignBtn.onclick = () => socket.emit('resign', playerRole);
+
+    const drawBtn = document.createElement('button');
+    drawBtn.innerText = 'Offer Draw';
+    drawBtn.classList.add('control-btn');
+    drawBtn.onclick = () => socket.emit('offerDraw');
+
+    controls.appendChild(resignBtn);
+    controls.appendChild(drawBtn);
+
+    boardElement.parentNode.insertBefore(controls, boardElement.nextSibling);
+};
+
+
+addControlButtons();

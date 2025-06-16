@@ -1,15 +1,14 @@
 const express = require('express');
 const socket = require('socket.io');
 const http = require("http");
-const { Chess } = require("chess.js");
+const Chess = require('chess.js').Chess;
 const path = require('path');
 
 const app = express();
-
 const server = http.createServer(app);
 const io = socket(server); 
 
-const chess = new Chess();
+let chess = new Chess();
 let players = {};
 
 app.set('view engine', 'ejs');
@@ -19,37 +18,42 @@ app.get('/', (req, res) => {
     res.render('index', { title: "Chess Game" });
 });
 
-io.on('connection', function(uniquesocket) {
-    console.log("New player connected: ");
+io.on('connection', function(socket) {
+    console.log("New player connected:", socket.id);
 
     if (!players.white) {
-        players.white = uniquesocket.id;
-        uniquesocket.emit('playerRole', 'w');
+        players.white = socket.id;
+        socket.emit('playerRole', 'w');
     } else if (!players.black) {
-        players.black = uniquesocket.id;
-        uniquesocket.emit('playerRole', 'b');
+        players.black = socket.id;
+        socket.emit('playerRole', 'b');
     } else {
-        uniquesocket.emit('spectatorRole');
+        socket.emit('spectatorRole');
     }
 
-    // ✅ Notify opponent if a player disconnects
-    uniquesocket.on("disconnect", function() {
-        if (uniquesocket.id === players.white) {
+    socket.on("disconnect", function() {
+        let wasPlayer = false;
+        if (socket.id === players.white) {
             delete players.white;
-            io.emit('opponentLeft'); // Notify all clients
-        } else if (uniquesocket.id === players.black) {
+            wasPlayer = true;
+        } else if (socket.id === players.black) {
             delete players.black;
-            io.emit('opponentLeft'); // Notify all clients
+            wasPlayer = true;
+        }
+
+        if (wasPlayer) {
+            chess.reset();
+            io.emit("opponentLeft");
         }
     });
 
-    uniquesocket.on('move', (move) => {
+    socket.on('move', (move) => {
         try {
-            if (chess.turn() === "w" && uniquesocket.id !== players.white) {
-                return uniquesocket.emit('invalidTurn');
+            if (chess.turn() === "w" && socket.id !== players.white) {
+                return socket.emit('invalidTurn');
             }
-            if (chess.turn() === "b" && uniquesocket.id !== players.black) {
-                return uniquesocket.emit('invalidTurn');
+            if (chess.turn() === "b" && socket.id !== players.black) {
+                return socket.emit('invalidTurn');
             }
 
             const result = chess.move(move);
@@ -57,22 +61,30 @@ io.on('connection', function(uniquesocket) {
                 io.emit("move", move);
                 io.emit("boardState", chess.fen());
 
-                // ✅ Checkmate detection
-                if (chess.isCheckmate()) {
+                if (chess.in_checkmate()) {
                     const winner = chess.turn() === 'w' ? 'Black' : 'White';
-                    io.emit('checkmate', winner);
+                    io.emit("checkmate", winner);
+                    chess.reset();
                 }
-
             } else {
-                console.log("Invalid move attempted:", move);
-                uniquesocket.emit('invalidMove', move);
+                socket.emit('invalidMove', move);
             }
-
         } catch (error) {
             console.log("Error in move validation:", error);
-            uniquesocket.emit('invalidMove', move);
+            socket.emit('invalidMove', move);
         }
     });
+
+    socket.on('resign', (player) => {
+        io.emit('resigned', player === 'w' ? 'White' : 'Black');
+        chess.reset();
+    });
+
+    socket.on('offerDraw', () => {
+        io.emit('draw');
+        chess.reset();
+    });
+
 });
 
 server.listen(3000, function () {
