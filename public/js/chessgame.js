@@ -6,6 +6,11 @@ let draggedPiece = null;
 let sourceSquare = null;
 let playerRole = null;
 let clickSource = null;
+let pendingPromotionMove = null;
+
+// Ask for name and notify server
+const playerName = prompt("Enter your name:");
+socket.emit('joinGame', playerName);
 
 const renderBoard = () => {
     const board = chess.board();
@@ -43,11 +48,9 @@ const renderBoard = () => {
                 squareElement.appendChild(pieceElement);
             }
 
-            squareElement.addEventListener('dragover', function(e) {
-                e.preventDefault();
-            });
+            squareElement.addEventListener('dragover', (e) => e.preventDefault());
 
-            squareElement.addEventListener("drop", function(e) {
+            squareElement.addEventListener("drop", function (e) {
                 e.preventDefault();
                 if (draggedPiece) {
                     const targetSource = {
@@ -58,7 +61,6 @@ const renderBoard = () => {
                 }
             });
 
-            // Click-to-move support
             squareElement.addEventListener("click", function () {
                 const clicked = {
                     row: parseInt(squareElement.dataset.row),
@@ -80,36 +82,44 @@ const renderBoard = () => {
         });
     });
 
-    if(playerRole === 'b'){
+    if (playerRole === 'b') {
         boardElement.classList.add('flipped');
-    }else {
+    } else {
         boardElement.classList.remove('flipped');
     }
 };
 
-const handleMove = (sourceSquare, targetSource) => {
-    const move = {
-        from: `${String.fromCharCode(97 + sourceSquare.col)}${8 - sourceSquare.row}`,
-        to: `${String.fromCharCode(97 + targetSource.col)}${8 - targetSource.row}`,
-        promotion: 'q' // Promote to queen
-    };
-    socket.emit('move', move);
+const handleMove = (sourceSquare, targetSquare) => {
+    const from = `${String.fromCharCode(97 + sourceSquare.col)}${8 - sourceSquare.row}`;
+    const to = `${String.fromCharCode(97 + targetSquare.col)}${8 - targetSquare.row}`;
+
+    const piece = chess.get(from);
+
+    if (piece?.type === 'p' &&
+        ((piece.color === 'w' && to.endsWith('8')) ||
+            (piece.color === 'b' && to.endsWith('1')))) {
+        pendingPromotionMove = { from, to };
+        document.getElementById('promotionModal').style.display = 'flex';
+    } else {
+        socket.emit('move', { from, to });
+    }
+};
+
+const selectPromotion = (promotion) => {
+    if (pendingPromotionMove) {
+        socket.emit('move', {
+            ...pendingPromotionMove,
+            promotion
+        });
+        pendingPromotionMove = null;
+        document.getElementById('promotionModal').style.display = 'none';
+    }
 };
 
 const getPieceUnicode = (piece) => {
     const unicodePiece = {
-        K: "♔",  // King
-        Q: "♕",  // Queen
-        R: "♖",  // Rook
-        B: "♗",  // Bishop
-        N: "♘",  // Knight
-        P: "♙",  // Pawn
-        k: "♚",  // King
-        q: "♛",  // Queen
-        r: "♜",  // Rook
-        b: "♝",  // Bishop
-        n: "♞",  // Knight
-        p: "♟"   // Pawn
+        K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘", P: "♙",
+        k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟"
     };
     return unicodePiece[piece.type] || '';
 };
@@ -138,46 +148,49 @@ socket.on('boardState', (fen) => {
     renderBoard();
 });
 
-socket.on('invalidMove', (move) => {
+socket.on('invalidMove', () => {
     alert("Invalid move attempted!");
 });
 
-// Checkmate detection
 socket.on('checkmate', (winner) => {
     alert(`Checkmate! ${winner} wins!`);
-});
-
-// Opponent left detection and reset
-socket.on('opponentLeft', () => {
-    alert("Opponent has left the match. Game will restart.");
     chess.reset();
     renderBoard();
 });
 
-// Draw
-socket.on('draw', () => {
-    alert("The game ended in a draw.");
-    chess.reset();
-    renderBoard();
-});
-
-// Stalemate
 socket.on('stalemate', () => {
     alert("The game ended in stalemate.");
     chess.reset();
     renderBoard();
 });
 
-socket.on('invalidClaim', (msg) => {
-    alert(msg);
+socket.on('resigned', (playerColor) => {
+    alert(`${playerColor} has resigned. Game over.`);
+    chess.reset();
+    renderBoard();
+});
+
+socket.on('playerJoined', (name) => {
+    alert(`Player ${name} has joined the game!`);
+});
+
+socket.on('drawOffered', () => {
+    const response = confirm("Your opponent has offered a draw. Do you accept?");
+    if (response) {
+        socket.emit('drawAccepted');
+    } else {
+        socket.emit('drawDeclined');
+    }
+});
+socket.on('draw', () => {
+    alert("The game ended in a draw by mutual agreement.");
+    chess.reset();
+    renderBoard();
 });
 
 
-// Resign
-socket.on('resigned', (player) => {
-    alert(`${player} resigned. Game over.`);
-    chess.reset();
-    renderBoard();
+socket.on('drawDeclinedNotification', () => {
+    alert("Your draw offer was declined.");
 });
 
 const addControlButtons = () => {
@@ -187,18 +200,23 @@ const addControlButtons = () => {
     const resignBtn = document.createElement('button');
     resignBtn.innerText = 'Resign';
     resignBtn.classList.add('control-btn');
-    resignBtn.onclick = () => socket.emit('resign', playerRole);
+    resignBtn.onclick = () => {
+        console.log("Resign clicked");
+        socket.emit('resign', playerRole);
+    };
 
     const drawBtn = document.createElement('button');
     drawBtn.innerText = 'Offer Draw';
     drawBtn.classList.add('control-btn');
-    drawBtn.onclick = () => socket.emit('offerDraw');
+    drawBtn.onclick = () => {
+        console.log("Draw clicked");
+        socket.emit('offerDraw');
+    };
 
     controls.appendChild(resignBtn);
     controls.appendChild(drawBtn);
 
     boardElement.parentNode.insertBefore(controls, boardElement.nextSibling);
 };
-
 
 addControlButtons();
